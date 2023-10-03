@@ -1,0 +1,226 @@
+---
+title: "Analyzing insurance costs based on individuals'data."
+author: "X"
+date: "`r Sys.time()`"
+output:
+  html_document:
+    theme: lumen
+    toc: yes
+    toc_depth: 3
+    toc_float: no
+    df_print: kable
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, message=FALSE, echo=FALSE, include=FALSE}
+library(tidyverse)
+library(readr)
+library(skimr)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(grid)
+```
+
+# Part I
+
+## Introduction
+
+In recent years, the world was hit by many different events altering human lives. We have faced a pandemic, countries battled inflation and supply chain issues, and the world is shifting and going through new governments, new organizations. With such trends, human lives and healthcare have been placed to a high importance in the United States and around the world. Recent studies have shown that the surge of the pandemic left several Americans medically uninsured. This is due the the rise in unemployment, and the loss of 'employer-sponsored health insurance' privileges that employees could get^[Henderson, E. B. (2022, December 29). Study shows how health insurance coverage changed during the COVID-19 pandemic. News-Medical.net https://www.news-medical.net/news/20210909/Study-shows-how-health-insurance-coverage-changed-during-the-COVID-19-pandemic.aspx]. Hence, it is very important for individuals to be aware of their options for medical insurance, and choose the best option that fits them. An analysis of the medical insurance charged to individuals based on their profiles showed that insurance charges differed (sometimes significantly) from one individual to the other based on specific features. Hence, the optimal medical insurance charge needs to be identified for each type of individual. 
+In this research paper, I aim to analyse the relationship between the body mass index of an individual living in a specified region of the US and the medical insurance charges corresponding to them through a linear regression model. I also analyze through data visualization, how certain factors such as age and smoking habits, might influence their insurance costs.
+
+
+```{r, message = FALSE, warning = FALSE}
+insurance_data <- read_csv("dossa_final.csv")
+glimpse(insurance_data)
+
+```
+
+The above data is taken from Kaggle^[Medical Cost Personal Datasets. (2018, February 21). Kaggle. https://www.kaggle.com/datasets/mirichoi0218/insurance] and records individuals with their characteristics and their medical insurance costs. The data set consists of 1338 individuals and 7 columns (age, sex, bmi, children, smoker, region, charges) describing these individuals. More information about the numerical variables present in this data can be found below:
+
+```{r, message = FALSE, warning = FALSE}
+insurance_data %>% 
+  select(age, bmi, charges, children) %>% 
+  skim()
+
+```
+
+By exploring the results from the above summary statistics, it can be seen that the mean insurance charge is $13270.422265 for the recorded individuals in the data set. Moreover, the mean of age is around 39 years old, meaning that our data set deals primarily with adults (which would make sense since children are usually covered by their parents' insurance coverage). One more interesting fact is that the mean of the body mass index of the people recorded in the data set is 30.663397, which corresponds to an overweight / obese profile from an adult^[Body Mass Index (BMI) In Adults. (2021, January 11). www.heart.org. https://www.heart.org/en/healthy-living/healthy-eating/losing-weight/bmi-in-adults]. It would be sound, therefore, to assume that we are dealing with body mass index of mostly overweight individuals in certain regions of the US throughout this research.
+
+Another piece of information we are able to derive from the statistics summary above is that our data set contains high numerical values for the 'charges' data. For the sake of our analysis, I will apply log 10 transformations to reduce the dynamic range of the variable so the differences are preserved while the scale is not that dramatically skewed^[What is the reason behind taking log transformation of few continuous variables? (2018, October 23). Data Science Stack Exchange. https://datascience.stackexchange.com/questions/40089/what-is-the-reason-behind-taking-log-transformation-of-few-continuous-variables]. This change will be applied to the 'bmi' variable as well.
+
+```{r, message = FALSE, warning = FALSE}
+insurance_data <- insurance_data %>%
+  mutate(
+    log10_charges = log10(charges),
+    log10_bmi = log10(bmi)
+    )
+mean_log10_charges <- log10(13270.422265)
+mean_log10_charges
+mean_log10_bmi <- log10(30.663397)
+mean_log10_bmi
+```
+## Data Visualization
+
+### _Smoking habits data per region_
+
+Bar-chart shows that the distribution of non-smokers is even across the four regions in the data set. This is an interesting observation as it suggests that non-smokers among regions are almost proportionate. Moreover, the smoking habits distribution for smokers among the four regions are also very similar, even though the count is significantly less (as seen on the graph). One slight difference here is that the southeast region counts a little more smokers compared to the 3 others. The distribution is slightly larger. Ths is also in accordance with recent studies conducted on smoking regions in the US^[Armstrong, M. (2017, June 16). The U.S. States That Smoke The Most. Statista Infographics. https://www.statista.com/chart/9855/the-us-states-that-smoke-the-most/]. This data will most likely lead to a higher insurance cost in the southeast compared to other regions as it can be seen in the following graphs.
+
+```{r, message = FALSE, warning = FALSE}
+#distribution of smoking habits among non-smokers is more proportionate than I would imagine
+par(mfrow = c(1,3))
+p1 <- ggplot(insurance_data, aes(x = smoker, fill = region)) +
+  geom_bar(color = "white")+
+  labs(x = "smoker", title = "Smoking habits per region")+
+  theme(plot.margin = unit(c(1,1,1,1),"cm"))
+p1
+```
+
+### _Insurance charges and age distribution_
+
+The faceted scatter-plot shows the distribution of insurance charges per region with age. Interestingly once again, the distribution of insurance charges in respect to age seems to be very similar among the four regions. The scatter-plots show an increase in insurance charges as we move along the age axis. Moreover, some insurance costs are nearly never charged to a certain range of age. For example, an insurance cost (in log) of 3.5 ($3162.2777 USD) was never charged to anyone over 40 years old. Another interesting observation (that brings us back to our previous bar-chart analysis) is that the slope of the 'insurance charges - age' distribution in the southeast appears the steepest out of the 4 regions. This suggest that those in the southeast are being charged high insurance costs at a more increasing rate compared to the other states. On the other hand,the northwest seems to have less of an inclined slope out of all the regions listed. This result can be explained by economic factors such as income per capita, GDP per capita, access to healthcare which factors in ranking the northwest as the best region with highest quality of life in the US according to recent studies^[Quality of Life by State 2023. (n.d.). https://worldpopulationreview.com/state-rankings/quality-of-life-by-state].
+
+```{r, message = FALSE, warning = FALSE}
+p3 <- ggplot(insurance_data, aes(x = age, y = log10_charges, fill = region)) +
+  geom_point() +
+  labs(x = "Age", title = "Insurance charges and age distribution") + 
+  geom_smooth(method = "lm", se = FALSE)+
+  geom_jitter(aes(color = region), alpha = 0.5)+
+  facet_wrap(~ region)
+p3
+```
+
+### _Insurance charges histogram_
+
+The histogram below shows the insurance costs over all regions. By converting the vertical axis data from count to density, I was able to come up with the best-fit curve for the below histogram. It can be seen that the mean value is around 4.1, which matches the results from the skim function performed above (mean = 4.12). Although the observation from the histogram doesn't look perfectly normal, the evolution trend displays a normal distribution model, meaning that the medical insurance charges are  mostly centered around a given interval.
+
+```{r, message = FALSE, warning = FALSE}
+options(repr.plot.width = 5, repr.plot.height =2)
+ggplot(insurance_data, aes(x = log10_charges)) +
+  geom_histogram(aes(y=..density..), color = "white")+
+  stat_function(fun = dnorm,
+                args = list(mean = mean(insurance_data$log10_charges),
+                            sd = sd(insurance_data$log10_charges)),
+                col = "blue",
+                size = 3)+
+  labs(x = "Charges", title = "Insurance charges histogram") +
+  theme(text = element_text(size = 9),element_line(size =1))
+```
+
+### _Insurance charges and gender distribution_
+
+After observing the correlation between age and insurance charges, let's now explore how insurance charges and sex correlate. The box-plot shows that insurance charges and gender distribution have a similar pattern, however, more males were recorded in the data set than females. Also, we can see that the median insurance charge for females is slightly higher than that of males. This observation also matches recent studies revealing that women usually get charged higher insurance costs than men because they tend to visit the doctor more frequently^[McMillian, J. (2022, August 30). Insurance Rates Male vs. Female. Pocketsense. https://pocketsense.com/insurance-rates-male-vs-female-6684278.html].
+
+
+```{r, message = FALSE, warning = FALSE}
+options(repr.plot.width = 5, repr.plot.height =2)
+ggplot(data = insurance_data, mapping = aes(x = factor(sex), y = charges)) +
+  geom_boxplot() +
+  geom_boxplot(size = .8, alpha = 0.5) +
+    geom_jitter(aes(color = sex), alpha = 0.2) +
+    scale_y_log10(breaks = c(1000, 5000, 10000, 20000)) +
+    labs(title = "Insurance charges and gender distribution")+
+  theme_classic()+
+   theme(text = element_text(size = 9),element_line(size =1))
+```
+
+# Part II: Regression model
+
+## _Relationship between body mass index and charges_
+
+In the second part of this research, I will focus primarily on the body mass index and the insurance charges distribution and analyze their correlation. The scatter-plot below shows the relationship between charges and body mass index across all ages and all regions in the data set.
+
+```{r, message = FALSE, warning = FALSE}
+options(repr.plot.width = 5, repr.plot.height =2)
+ggplot(insurance_data) + geom_point(aes(x=log10_bmi, y=log10_charges, color=age), alpha = 0.5) + geom_smooth(aes(x=log10_bmi, y=log10_charges))+
+  labs(y = "charges", 
+       x = "bmi", 
+       title = "Insurance charges and bmi distribution with age")+
+  theme(text = element_text(size = 9),element_line(size =1))
+```
+The body mass index shows a clearly positive correlation with charges across all regions and ages listed. I was interested in visualizing this information on a more specific level. This was achieved through the faceted scatter-lot below showing the distribution between insurance charges and body mass index for individuals per region.
+
+```{r, message = FALSE, warning = FALSE}
+options(repr.plot.width = 5, repr.plot.height =2)
+ggplot(insurance_data, 
+       aes(x = log10_bmi, y = log10_charges, col = region)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(y = "charges", 
+       x = "bmi", 
+       title = "Insurance charges and bmi") +
+  facet_wrap(~ region)+
+  theme(text = element_text(size = 9),element_line(size =1))
+```
+Right off the bat, from the graph above, we cannot help but notice the different slopes of the lines showing the relationship between body mass index and regions. As opposed to the recent observations between charges and age, the southeast region has the flattest slope this time. Hence, the body mass index might not account as a significant component in determining insurance costs in the southeast. An increase in the body mass index involves a very slight increase in charges in that region. 
+The same case applies to the northwest region where, from the graph above, it can be seen that the body mass index doesn't account for too much changes in insurance charges. The reason why these two regions are less responsive to the change in body mass index in determining insurance costs is that other variables (as seen above) influence the insurance charges to a higher extent than the body mass index. hence, predicting insurance charges through the body mass index for these two regions  will result in inaccurate or flawed results since other variables are more tremendous in making this prediction. Let's build an interaction model focusing on the body mass index and charges in the northeast and southwest.
+
+
+### _Charges and Bmi interaction model (northeast and southwest regions)_
+
+From the previous graph, it can be seen that, in both regions, the body mass index and the insurance charges have a linear relationship. It would be therefore sound to plot a linear model for our regression lines.
+
+```{r, message = FALSE, warning = FALSE}
+options(repr.plot.width = 5, repr.plot.height =2)
+insurance_data_wrangled <- insurance_data%>%
+  filter(region == "northeast" | region == "southwest")
+
+ggplot(data = insurance_data_wrangled, mapping = aes(x = log10_bmi, y = log10_charges, color = region)) + 
+  geom_smooth(method="lm", se=F)+
+  geom_point(alpha = 0.2)+
+  labs(y = "log10_charges", 
+       x = "log10_bmi", 
+       title = "Insurance charges and bmi")
+```
+### _Regression table_
+
+In this paper, I will adopt the parallel slope model for the regression where each region will have the same slope, but different intercepts. The model summary below helped me establish the linear model form of          _y ~ b0+b1x1 + b2x2_. Through this parallel slope model, the variables x1 (bmi) and x2 (region) affect the response variable y (charges), but they do not interact with one another^[Equitable Equations. (2021, December 8). Linear modeling in R using categorical variables - parallel slopes models. YouTube. https://www.youtube.com/watch?v=GMPjQcGO4CU]. The below regression table provides us with the values b0, b1, and b2 under the estimate column. Plugging these values to find the y variable will help provide both graphs with the same slope. 
+This parallel slope model was implemented because the ggplot2 package does not have a convenient way to plot parallel slope models.
+
+```{r, message = FALSE, warning = FALSE}
+model <- lm(log10_charges ~ log10_bmi + region, data = insurance_data_wrangled)
+summary(model)
+
+ggplot(insurance_data_wrangled, aes(x=log10_bmi, y=log10_charges, col = region))+
+  geom_point(alpha = 0.2)+
+  geom_abline(aes(intercept = 2.63668,
+                  slope = 0.92407,
+                  col = "northeast"))+
+  geom_abline(aes(intercept = 2.63668-0.08026,
+                  slope = 0.92407,
+                  col = "southwest"))+
+  theme(text = element_text(size = 9),element_line(size =1))+
+  labs(y = "log10_charges", 
+       x = "log10_bmi", 
+       title = "Insurance charges and bmi")
+```
+
+
+### _Making predictions_
+
+The following prediction table provides us with the insurance charges prediction results for certain body mass indexes in the southwest and northeast. This model succeeds therefore at responding to the question 'what will my insurance cost be given my body mass index of x?' for an adult living in the northeast or southwest region. 
+
+```{r, message = FALSE, warning = FALSE}
+#make predictions
+predict(model, data.frame(log10_bmi = c(1.3, 1.6, 2.0), region = "southwest"))
+
+predict(model, data.frame(log10_bmi = c(1.3, 1.6, 2.0), region = "northeast"))
+```
+
+
+## _Conclusion_
+
+Overall, we can conclude that a few things came out of this research. Firstly, the distribution of medical insurance charges and body mass index are almost always proportional across regions. Nonetheless, there are certain variables that prevail in other regions and influence the medical insurance charges more than in others. Furthermore, we found out that age and insurance charges have a positive correlation among all regions, with a flatter slope in the northwest. On the other hand, the southwest had the steepest slope in regard to these two variables, meaning that insurance costs rise quickly as an individual becomes older in that region. We also ran a regression model and found out that, once again, there is an obvious positive correlation between the body mass index and the insurance charges. We focused on this variable specifically due to an interesting observation earlier during this research: our data set contains mostly overweight / obese adults of the US.
+
+Overall, individuals with higher body mass index and frequent habits of smoking get charged more in insurance costs (close to $25118.864 USD) according to our predictions.
+
+So, if you want to reduce your insurance charges as a non-sponsored adult in the future, avoid smoking and maintain a balanced diet.
+
+
+
